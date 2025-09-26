@@ -12,6 +12,8 @@ using boost::multiprecision::cpp_dec_float_50;
 const uint64_t MAX_EXACT = 20000;
 const uint64_t SEQ_THRESHOLD = 64;
 
+const int j;
+
 //строка содержит только цифры
 bool is_digits(const string& s) {
     if (s.empty()) return false;
