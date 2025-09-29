@@ -20,22 +20,23 @@ using boost::multiprecision::cpp_dec_float_50;
 
 const uint64_t MAX_EXACT = 50000;
 const uint64_t SEQ_THRESHOLD = 64;
+namespace fs = std::filesystem;
 
-// параллелизм / чекпоинты — настраиваемые параметры
-unsigned int MAX_THREADS = std::max(2u, std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 2u);
-// минимальная длина диапазона для запуска задачи асинхронно
+//параллелизм / чекпоинты — настраиваемые параметры
+unsigned int MAX_THREADS = std::max(2u, std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 2u); //??????????
+//минимальная длина диапазона для асинхронки
 const uint64_t MIN_RANGE_FOR_TASK = 1024;
-// минимальная длина диапазона для сохранения чекпоинта
+//минимальная длина диапазона для чекпоинта
 const uint64_t SAVE_MIN_RANGE = 8192;
-// директория чекпоинтов
-const std::string CHECKPOINT_DIR = "checkpoints";
+//директория чекпоинтов
+const std::string CHECKPOINT_DIR = "checkpoints";     
 
-// отладочные логи (false для обычного запуска)
-const bool VERBOSE = false;
+//отладочные логи 
+const bool VERBOSE = false;           //УБРАТЬ 
 
-// глобальная синхронизация для ограничения числа активных задач
+//глобальная синхронизация для ограничения числа активных задач
 std::mutex thr_mu;
-std::condition_variable thr_cv;
+std::condition_variable thr_cv;         //??????????
 unsigned int active_threads = 0;
 
 bool is_digits(const string& s) {
@@ -56,31 +57,31 @@ cpp_int parse_cpp_int(const string& s) {
 }
 
 bool fits_uint64(const cpp_int& n) {
-    return n <= cpp_int(std::numeric_limits<uint64_t>::max());
+    return n <= cpp_int(std::numeric_limits<uint64_t>::max()); //??????????
 }
 
-// сериализация / десериализация
+//сериализация / десериализация - преобразование в поток байтов
 bool load_checkpoint(uint64_t l, uint64_t r, cpp_int& out) {
-    namespace fs = std::filesystem;
     fs::path dir(CHECKPOINT_DIR);
     fs::path file = dir / ("prod_" + to_string(l) + "_" + to_string(r) + ".bin");
     if (!fs::exists(file)) return false;
-    std::ifstream ifs(file, std::ios::binary);
-    if (!ifs) return false;
+    ifstream ifs(file, std::ios::binary); //открытие файлового потока
+    if (!ifs) {
+        return false;
+    }
     std::vector<unsigned char> data((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     ifs.close();
     if (data.empty()) return false;
-    boost::multiprecision::import_bits(out, data.begin(), data.end(), 8, false);
+    boost::multiprecision::import_bits(out, data.begin(), data.end(), 8, false);//импортируем байты в cpp_int
     return true;
 }
 
 void save_checkpoint(uint64_t l, uint64_t r, const cpp_int& val) {
-    namespace fs = std::filesystem;
     fs::path dir(CHECKPOINT_DIR);
     try {
         fs::create_directories(dir);
     }
-    catch (...) {
+    catch (...) {                   //ПОЧЕМУ (...) /???????
         return;
     }
     fs::path file = dir / ("prod_" + to_string(l) + "_" + to_string(r) + ".bin");
@@ -100,7 +101,6 @@ cpp_int multiply(uint64_t l, uint64_t r) {
     return res;
 }
 
-// ---------- Управление задачами с ограничением parallelism ----------
 // Запуск: если есть слот для асинхронного запуска — запускаем std::async и увеличиваем active_threads.
 // Если слота нет — выполняем f синхронно в текущем потоке (чтобы избежать дедлока).
 // Гарантируем корректное уменьшение active_threads при завершении асинхронной задачи.
